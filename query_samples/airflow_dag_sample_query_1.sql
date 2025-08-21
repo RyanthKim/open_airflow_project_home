@@ -58,12 +58,12 @@ CREATE TEMP TABLE temp_portfolio_event_logs AS
                     WHEN lag(L.renewalcount) OVER (PARTITION BY S.workspaceid
                                                    ORDER BY extract(epoch
                                                                     FROM L.logdatetimestamp)::int) <= L.renewalcount
-                         AND L.eventname = 'APPLIED_PLAN_RENEWED' THEN 'SUBSCRIPTION_RENEWED'
+                         AND L.eventname = 'APPLIED_PLAN_RENEWED' THEN 'PLAN_RENEWED'
                     WHEN L.eventname = 'APPLIED_PLAN_RENEWED'
                          AND L.subscribingplanplaninterval = 'YEAR'
-                         AND (L.renewalcount) >= 0 THEN 'SUBSCRIPTION_RESET'
+                         AND (L.renewalcount) >= 0 THEN 'PLAN_RESET'
                     WHEN L.eventname = 'SUBSCRIPTION_TERMINATED' THEN 'SUBSCRIPTION_STOPPED'
-                    WHEN L.eventname = 'APPLIED_PLAN_RENEWED' THEN 'SUBSCRIPTION_RENEWED'
+                    WHEN L.eventname = 'APPLIED_PLAN_RENEWED' THEN 'PLAN_RENEWED'
                     ELSE L.eventname
                 END AS eventname,
                 CASE
@@ -173,7 +173,7 @@ CREATE TEMP TABLE temp_portfolio_event_logs AS
                                         'PLAN_MIGRATION_2022_11') THEN 'SNAPSHOT'
                  WHEN ali.eventname = 'SUBSCRIPTION_CHANGED'
                       AND nextplanid IS NOT NULL THEN 'SUBSCRIPTION_NEXT_PLAN_CHANGED'
-                 WHEN ali.eventname = 'SUBSCRIPTION_RESET'
+                 WHEN ali.eventname = 'PLAN_RESET'
                       AND ali.prev_nextplanid IS NOT NULL
                       AND ali.prev_nextplanid = ali.planid THEN 'SUBSCRIPTION_CHANGED'
                  ELSE ali.eventname
@@ -205,7 +205,7 @@ migration_planid_map_v2 AS
              prev_planid AS migration_target_planid
       FROM main_mapping_step1 main
       LEFT JOIN portfolio_plan_info pi ON pi.id = main.planid
-      WHERE main.eventname = 'SUBSCRIPTION_RESET'
+      WHERE main.eventname = 'PLAN_RESET'
         AND main.planid != main.prev_planid --
  ), --
  --
@@ -318,22 +318,22 @@ INSERT INTO portfolio_subscription_periods (
                        ael.logdatetimestamp,
                        ael.logtimestamp,
                        CASE
-                           WHEN ael.eventname = 'SUBSCRIPTION_RESET' THEN lr.planid
-                           WHEN ael.eventname = 'SUBSCRIPTION_RENEWED'
+                           WHEN ael.eventname = 'PLAN_RESET' THEN lr.planid
+                           WHEN ael.eventname = 'PLAN_RENEWED'
                                 AND coalesce(lr.planid, '') = coalesce(ael.planid, lr.planid, '') THEN lr.planid
                            ELSE ael.planid
                        END AS new_planid,
                        CASE
-                           WHEN ael.eventname = 'SUBSCRIPTION_RESET' THEN lr.planid
-                           WHEN ael.eventname = 'SUBSCRIPTION_RENEWED'
+                           WHEN ael.eventname = 'PLAN_RESET' THEN lr.planid
+                           WHEN ael.eventname = 'PLAN_RENEWED'
                                 AND coalesce(lr.planid, '') = coalesce(ael.planid, lr.planid, '') THEN lr.group_number
                            WHEN coalesce(lr.planid, '') != coalesce(ael.planid, lr.planid, '') THEN lr.group_number + 1
                            ELSE lr.group_number
                        END AS new_group_planid,
                        ael.idx,
                        CASE
-                           WHEN ael.eventname = 'SUBSCRIPTION_RESET' THEN lr.group_number
-                           WHEN ael.eventname = 'SUBSCRIPTION_RENEWED'
+                           WHEN ael.eventname = 'PLAN_RESET' THEN lr.group_number
+                           WHEN ael.eventname = 'PLAN_RENEWED'
                                 AND coalesce(lr.planid, '') = coalesce(ael.planid, lr.planid, '') THEN lr.group_number
                            WHEN coalesce(lr.planid, '') != coalesce(ael.planid, lr.planid, '') THEN lr.group_number + 1
                            ELSE lr.group_number
