@@ -290,7 +290,14 @@ migration_planid_map_v2 AS
 --     PRIMARY KEY (id));
 
 -- 샘플 데이터 처리 로직
-WITH RECURSIVE subscription_periods_recursive(eventid, workspaceid, eventname, logdatetimestamp, logtimestamp, planid, group_planid, idx, group_number) AS
+-- 재귀 CTE를 INSERT 구문 안에 포함하여 포트폴리오 테이블에 삽입
+INSERT INTO portfolio_subscription_periods (
+    id, workspaceid, eventid, subscription_start, subscription_end, 
+    expected_subscription_end, planid, issubscribing, nextresetdate, 
+    resetdateofmonth, remainingresetcount, currenttimes, maxtimes, 
+    title, grade, price, resetperiodvalue, suppliedresetcount, planversion
+)
+(WITH RECURSIVE subscription_periods_recursive(eventid, workspaceid, eventname, logdatetimestamp, logtimestamp, planid, group_planid, idx, group_number) AS
      (SELECT eventid,
              workspaceid,
              eventname,
@@ -319,8 +326,9 @@ WITH RECURSIVE subscription_periods_recursive(eventid, workspaceid, eventname, l
                        CASE
                            WHEN ael.eventname = 'SUBSCRIPTION_RESET' THEN lr.planid
                            WHEN ael.eventname = 'SUBSCRIPTION_RENEWED'
-                                AND coalesce(lr.planid, '') = coalesce(ael.planid, lr.planid, '') THEN lr.planid
-                           ELSE coalesce(ael.planid, lr.planid)
+                                AND coalesce(lr.planid, '') = coalesce(ael.planid, lr.planid, '') THEN lr.group_number
+                           WHEN coalesce(lr.planid, '') != coalesce(ael.planid, lr.planid, '') THEN lr.group_number + 1
+                           ELSE lr.group_number
                        END AS new_group_planid,
                        ael.idx,
                        CASE
@@ -334,6 +342,28 @@ WITH RECURSIVE subscription_periods_recursive(eventid, workspaceid, eventname, l
       LEFT JOIN temp_portfolio_event_logs ael ON ael.workspaceid = lr.workspaceid
       AND lr.idx + 1 = ael.idx
       WHERE ael.idx_inverse >= 1)
+SELECT 
+    SUBSTRING(MD5(RANDOM()::text), 1, 32) AS id,
+    workspaceid,
+    eventid,
+    logdatetimestamp AS subscription_start,
+    NULL AS subscription_end,
+    NULL AS expected_subscription_end,
+    planid,
+    true AS issubscribing,
+    NULL AS nextresetdate,
+    1 AS resetdateofmonth,
+    1 AS remainingresetcount,
+    0 AS currenttimes,
+    100 AS maxtimes,
+    'Portfolio Plan' AS title,
+    1 AS grade,
+    10000 AS price,
+    1 AS resetperiodvalue,
+    1 AS suppliedresetcount,
+    1 AS planversion
+FROM subscription_periods_recursive);
+
 SELECT '포트폴리오 샘플 쿼리 1 완료' AS status,
        CURRENT_TIMESTAMP AS execution_time;
 
